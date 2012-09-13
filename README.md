@@ -1,12 +1,13 @@
-lazybone
+Lazybone
 ========
+
+- - - - WORK IN PROGRESS! - - -
 
 Model relationship for Backbone.js
 
+```javascript
 
-``` javascript
-
-var MyClass = Backbone.Model.extend({
+var Post = Backbone.Model.extend({
 
 	setUser: function(user) {
 		this.relationship('user', user);
@@ -19,5 +20,17 @@ var MyClass = Backbone.Model.extend({
 	}
 
 });
+
+```
+
+```javascript
+
+var post = new Post({...});
+post.setUser(userObj);
+
+[...]
+
+post.fetchChildren();
+post.toJSON();
 
 ```
