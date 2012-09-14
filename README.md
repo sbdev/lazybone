@@ -10,11 +10,11 @@ Model relationship for Backbone.js
 var User = Backbone.Model.extend({});
 var Post = Backbone.Model.extend({});
 
-var user = new User({name:'John', id: '123456'});
+var user = new User({name:'John', phone: '123456'});
 
-var post = new Post({id:'98765'});
+var post = new Post({title:'Hello'});
 post.addChild('user', user);
-post.save(); // stores JSON { id: '98765', user: '123456' }
+post.save(); // stores JSON { title: 'Hello', user: 'b1f4f9a523e36fd969f4573e25af4540' }
 
 ```
 
@@ -22,9 +22,9 @@ post.save(); // stores JSON { id: '98765', user: '123456' }
 
 var post = new Post({id:'someid'});
 post.fetch();
-post.toJSON(); // returns JSON { id: '98765', user: {id: '123456' } }
+post.toJSON(); // returns JSON { id: '...', title: 'Hello', user: { id: 'b1f4f9a523e36fd969f4573e25af4540' } }
 
 post.fetchChildren();
-post.toJSON(); // returns JSON { id: '98765', user: {id: '123456', name: 'John'} }
+post.toJSON(); // returns JSON { id: '...', title: 'Hello', user: { id: 'b1f4f9a523e36fd969f4573e25af4540', name: 'John', phone: '123456' } }
 
 ```
