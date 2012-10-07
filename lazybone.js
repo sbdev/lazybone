@@ -1,173 +1,197 @@
-var	Backbone = require('backbone');
-var h = require('../lib/helpers'); //h.u is Underscore.js
-var async = require('async');
 
-// = = = = = = = = = = = = = = = = = = = = = = = = = = = = = = = = = = = = = = = = = = = = = = = = = = 
-// Generic
 
-var Entity = exports.Entity = function() {};
-Entity.extend = function(props) {
-	//http://nodejs.org/api/util.html#util_util_inherits_constructor_superconstructor
-	var child = function(){this.initialize && this.initialize.apply(this,arguments);};
-	h.util.inherits(child, this); //util.inherits(ctor, superCtor)
-	h.u.extend(child.prototype,props);
-	child.extend = this.extend;
-	return child;
-};
+(function( Backbone, _ ) {
 
-// = = = = = = = = = = = = = = = = = = = = = = = = = = = = = = = = = = = = = = = = = = = = = = = = = = 
-// Model
+	var root = this; //window
 
-exports.Model = Backbone.Model.extend({
+	var Model = Backbone.Model.extend({
 
-	toJSON: function( secure ) {
-		// called by controller when returning object to User
+		toPlain: function() {
+			return this.toJSON( {expand: true} );
+		},
 
-		var fmt = {};
-		this.attributes.hasOwnProperty('createdAt') && ( fmt.createdAt=this.get('createdAt').format() ); //iso8601
+		toJSON: function( plain ) {
 
-		var ret = h.u.extend( h.u.clone(this.attributes), fmt );
+			var attrs = _.clone(this.attributes);
+			var rel = this.child();
+			Object.keys( rel  ).forEach( function(key) {
+				attrs[key] = plain ? rel[key].toPlain() : rel[key].toJSON();
+			});
 
-		if (!secure) {
-			// secure sensible info!
+			return attrs;
+		},
+		
+		parse: function( rec, xhr ) {
+			// parse/sanitize
+			rec || (rec={});
+			this.rel || (this.rel=[]);
 
-			// i.e.
-			// delete ret['apiSecret'];
+			// require MyClass = LazyBone.extend({... rel:['user','category'] })
+			this.rel.forEach( function(key) {
+				if (!rec.hasOwnProperty(key)) return;
+				self.child(rec[key]);
+				rec[key] = self.getChild(key);
+			});
+
+			return rec;
+		},
+
+		child: function( name, obj ) {
+
+			// getter/setter/getAll
+			this._rel || (this._rel={});
+
+			if (!arguments.length) return this._rel;
+			if (arguments.length === 2) return (this._rel[name] = new Model.Lazy(obj));
+
+			// if model has been fetched return it otherwise return Lazy instance
+			if (this._rel[name]) return this._rel[name].model || this._rel[name];
+			return null;
+		},
+
+		fetchChildren: function( options ) {
+
+			var self = this;
+
+			var done = function(err) {
+
+				if (err) return options.error && options.error(self,{});
+
+				options.success && options.success();
+
+			};
+
+			if (!this._rel) return done();
+
+			var allRels = Object.keys( this._rel );
+
+			var fetchNext = function() {
+
+				if (!allRels.length) return done();
+				var key = allRels.shift();
+				var child = self.child(key);
+
+				if ( child instanceof Model.Lazy ) {
+
+					var options = _.extend({}, options, {
+						success: function() { fetchNext(); },
+						error: function(err) { done(err); }
+					});
+
+					return child.fetch(options);
+				}
+
+				return fetchNext();
+
+			};
+
+			fetchNext();
+
 		}
-		delete ret['$ItemName'];
 
-		return ret;
-	},
-	
-	toStorageJSON: function() {
-		// called by resource manager when saving to DB
+	});
 
-		var fmt = {};
-		this.attributes.hasOwnProperty('createdAt') && ( fmt.createdAt=this.get('createdAt').format() ); //iso8601
+	// = = = = = = = = = = = = = = = = = = = = = = = = = = = = = = = = = = = = = = = = = = = = = = = = = = 
+	// Collection
 
-		return h.u.extend( h.u.clone(this.attributes), fmt );
-	
-	},
+	var Collection = Backbone.Collection.extend({
 
-	parse: function( rec, xhr ) {
-		// parse/sanitize
-		// -  called by constructor if options.parse (when creating object from DB and from user input)
-		// -  called on this.update (when updating attributes with an object literal)
+		fetchChildren: function(options) {
 
-		if (!rec.hasOwnProperty('createdAt')) return;
+			var self = this;
 
-		rec.createdAt = h.u.isString(rec.createdAt) ? new h.Moment(rec.createdAt) : rec.createdAt;
+			var done = function(err) {
 
-		return rec;
-	},
+				if (err) return options.error && options.error(self,{});
 
-	getChild: function( name ) {
-		this.rel || (this.rel={});
-		return this.rel[name] || null;
-	},
+				options.success && options.success();
 
-	setChild: function( name, obj ) {
-		this.rel || (this.rel={});
-		if (typeof obj === 'string' || typeof obj === 'number') {
-			obj = new Lazy(obj);
-		}
-		this.rel[name] = obj;
-	},
+			};
 
-	fetchChildren: function( options ) {
+			if (!this.models || !this.models.length) return done();
 
-		var self = this;
-		if (!this.rel) return options.success && options.success(self,{});
+			//shallow copy
+			var allModels = this.models.slice();
 
-		ctx || (ctx = this.ctx);
-		async.forEach( Object.keys( this.rel ), function(key, cb) {
+			var fetchNext = function() {
 
-			if ( self.rel[key] instanceof Lazy ) {
+				if (!allModels.length) return done();
+				var model = allModels.shift();
 
 				var options = _.extend({}, options, {
-					success: function() { cb(); },
-					error: function(err) { cb(err); }
+					success: function() { fetchNext(); },
+					error: function(err) { done(err); }
 				});
 
-				return self.rel[key].fetch(options);
-			}
+				model.fetchChildren( options );
 
-			return cb();
+				return fetchNext();
 
-		}, function(err) {
+			};
 
-			if (err) return options.error && options.error(self,{});
+			fetchNext();
 
-			options.success && options.success(self,{});
+		}
 
-		});
-	}
+	});
 
-});
+	// = = = = = = = = = = = = = = = = = = = = = = = = = = = = = = = = = = = = = = = = = = = = = = = = = = 
+	// Model placeholder (lazy loading)
 
-// = = = = = = = = = = = = = = = = = = = = = = = = = = = = = = = = = = = = = = = = = = = = = = = = = = 
-// Collection
+	Model.Lazy = function Lazy( idModel ) {
 
-exports.Collection = Backbone.Collection.extend({
+		if (typeof idModel === 'string' || typeof idModel === 'number') {
+			this.id = idModel;
+			this.model = null;
+			return;
+		}
 
-	fetchChildren: function(ctx) {
-		async.forEach( this.models, function(model, callback){
-			model.fetchChildren(ctx, callback);
-		});
-	}
+		this.id = idModel.get('id');
+		this.model = idModel;
+	};
 
-});
+	Model.Lazy.prototype = {
 
-// = = = = = = = = = = = = = = = = = = = = = = = = = = = = = = = = = = = = = = = = = = = = = = = = = = 
-// Model placeholder (lazy loading)
+		fetch: function(options) {
+			var self = this;
+			this.model = new this.Parent({id: this.id}); //TODO:
+			onSuccess = options.success;
+			options = _.extend({}, options, {
+				success: function(model){
+					var options = _.extend({}, options, {
+						success: function() { onSuccess && onSuccess.apply(onSuccess, arguments); }
+					});
+					model.fetchChildren(options);
+				}
+			});
+			this.model.fetch(options);
+		},
 
-Backbone.Model.extend = function(){
-	var child = ext.apply(this,arguments);
-	child.Lazy.prototype = _.extend(
-		{},
-		child.Lazy.prototype,
-		{Parent: child}
-	); 
-	return child;
-};
+		toPlain: function() {
+			return this.model ? this.model.toJSON() : { id: this.id };
+		},
 
-var Lazy = exports.Lazy = Backbone.Model.Lazy = function Lazy(id) {
-	this.id = id;
-	this.ctx = ctx; //optional
-	this.model = null;
-};
+		toJSON: function() {
+			return this.id;
+		},
 
-Lazy.prototype = {
+		get: function(key) {
+			if (key=='id') return this.id;
+		},
 
-	fetch: function(options) {
-		var self = this;
-		this.model = new this.Parent({id: this.id});
-		onSuccess = options.success;
-		options = _.extend({}, options, {
-			success: function(model){
-				var options = _.extend({}, options, {
-					success: function() { onSuccess && onSuccess.apply(onSuccess, arguments); }
-				});
-				model.fetchChildren(options);
-			}
-		});
-		this.model.fetch(options);
-	},
+		acquire: function(callback) {
+			if (!this.model) return this.fetch({
+				success: callback, 
+				error: function(err) { callback( new Error(err) ); }
+			});
+			return this.model;
+		}
 
-	toJSON: function() {
-		return this.model ? this.model.toJSON() : { id: this.id };
-	},
+	};
 
-	get: function(key) {
-		if (key=='id') return this.id;
-	},
+	root.LazyBone = {
+		Model: Model,
+		Collection: Collection
+	};
 
-	acquire: function(callback) {
-		if (!this.model) return this.fetch({
-			success: callback, 
-			error: function(err) { callback( new Error(err) ); }
-		});
-		return this.model;
-	}
-
-};
+})( Backbone, _ );
