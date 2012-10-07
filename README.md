@@ -7,8 +7,11 @@ Model relationship for Backbone.js
 
 ```javascript
 
-var User = Backbone.Model.extend({});
+var User = Backbone.Model.extend({
+	urlRoot : '/user'
+});
 var Post = Backbone.Model.extend({
+	urlRoot : '/post',
 	rel: ['user']
 });
 
@@ -23,7 +26,7 @@ post.save(); // stores { title: 'Hello', user: 'b1f4f9a523e36fd969f4573e25af4540
 
 ```javascript
 
-var post = new Post({url: 'http://api.foo.com/post/84c48d8e8dae6241ec61766c0e44282e'});
+var post = new Post({id: '84c48d8e8dae6241ec61766c0e44282e'});
 post.fetch();
 post.toJSON();
 /* returns JSON {
@@ -51,6 +54,13 @@ post.toJSON({expand: true});
 		name: 'John',
 		phone: '123456'
 	}
+} */
+
+post.child('user').toJSON()
+/* returns JSON {
+	id: 'b1f4f9a523e36fd969f4573e25af4540', 
+	name: 'John',
+	phone: '123456'
 } */
 
 ```

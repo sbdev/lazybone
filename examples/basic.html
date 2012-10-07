@@ -4,12 +4,20 @@
 
 	<body>
 
-		<script src="https://raw.github.com/documentcloud/underscore/master/underscore.js"></script>
-		<script src="https://raw.github.com/documentcloud/backbone/master/backbone.js"></script>
-		<script src="../lazybone.js"></script>
+		<h3> see Inspector Console... </h3>
 
 		<script>
 
+			var jQuery = {
+				ajax: function(options){
+					var response = JSON.parse(options.data);
+					console.log('[$.ajax]',options,response);
+					if (!response.id && options.type === 'POST') response.id = (new Date()).valueOf() + '';
+					options.success(response);
+				}
+			};
+
+			/*
 			Backbone.sync = function(method, model, options){
 
 				console.log('[sync] arguments', arguments);
@@ -21,11 +29,21 @@
 
 				console.log('[sync] serialized', JSON.stringify(model.toJSON()) );
 
-			};
+			}; */
 
+		</script>
 
-			var User = LazyBone.Model.extend({});
+		<script src="https://raw.github.com/documentcloud/underscore/master/underscore.js"></script>
+		<script src="https://raw.github.com/documentcloud/backbone/master/backbone.js"></script>
+		<script src="../lazybone.js"></script>
+
+		<script>
+
+			var User = LazyBone.Model.extend({
+				urlRoot : '/user'
+			});
 			var Post = LazyBone.Model.extend({
+				urlRoot : '/post',
 				rel: ['user']
 			});
 

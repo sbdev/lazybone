@@ -22,6 +22,9 @@
 		},
 		
 		parse: function( rec, xhr ) {
+
+			var self = this;
+
 			// parse/sanitize
 			rec || (rec={});
 			this.rel || (this.rel=[]);
@@ -30,7 +33,7 @@
 			this.rel.forEach( function(key) {
 				if (!rec.hasOwnProperty(key)) return;
 				self.child(rec[key]);
-				rec[key] = self.getChild(key);
+				rec[key] = self.child(key);
 			});
 
 			return rec;
